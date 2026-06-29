@@ -3,7 +3,7 @@
 A few small, self-contained utilities. Standard library / built-in only —
 no installs, no third-party packages.
 
-— D Das
+- D Das
 
 ## Files
 
