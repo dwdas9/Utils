@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<!--
+
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="author" content="D Das">
+<title>T Sim </title>
+<style>
+  :root {
+    --bg: #1e1e2e; --editor-bg: #181825; --titlebar: #11111b; --gutter: #313244;
+    --text: #cdd6f4; --kw: #cba6f7; --str: #a6e3a1; --num: #fab387; --com: #6c7086;
+    --fn: #89b4fa; --caret: #f5e0dc; --accent: #89b4fa; --panel: #1e1e2e;
+    --panel-line: #313244; --muted: #9399b2;
+    --mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "Courier New", monospace;
+    --ui: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: var(--bg); color: var(--text); font-family: var(--ui);
+    display: flex; flex-direction: column; min-height: 100vh; }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    padding: 12px 16px; background: var(--panel); border-bottom: 1px solid var(--panel-line); }
+  .controls button, .controls select { font-family: var(--ui); font-size: 13px; color: var(--text);
+    background: #313244; border: 1px solid #45475a; border-radius: 6px; padding: 7px 12px;
+    cursor: pointer; transition: background .15s, border-color .15s; }
+  .controls button:hover { background: #45475a; }
+  .controls button.primary { background: var(--accent); color: #11111b; border-color: var(--accent); font-weight: 600; }
+  .controls button.primary:hover { filter: brightness(1.08); }
+  .controls button:focus-visible, .controls select:focus-visible, .controls input:focus-visible {
+    outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ctrl-group { display: flex; align-items: center; gap: 7px; font-size: 13px; color: var(--muted); }
+  .ctrl-group input[type=range] { accent-color: var(--accent); }
+  .ctrl-group input[type=checkbox] { accent-color: var(--accent); width: 15px; height: 15px; }
+  .status { font-family: var(--mono); font-size: 13px; color: var(--muted); min-width: 120px; }
+  .status.live { color: var(--str); }
+  .spacer { flex: 1; }
+  .brand { font-size: 12px; color: var(--muted); letter-spacing: .04em; }
+  .badge { font-size: 11px; color: #11111b; background: var(--accent); border-radius: 4px;
+    padding: 2px 6px; font-weight: 700; margin-left: 6px; }
+
+  .stage { flex: 1; display: flex; padding: 18px; min-height: 0; }
+  .editor { flex: 1; display: flex; flex-direction: column; background: var(--editor-bg);
+    border: 1px solid #313244; border-radius: 10px; overflow: hidden;
+    box-shadow: 0 18px 50px rgba(0,0,0,.45); min-height: 0; }
+  .titlebar { display: flex; align-items: center; gap: 8px; background: var(--titlebar);
+    padding: 9px 14px; border-bottom: 1px solid #313244; flex: none; }
+  .dot { width: 12px; height: 12px; border-radius: 50%; }
+  .dot.r { background: #f38ba8; } .dot.y { background: #f9e2af; } .dot.g { background: #a6e3a1; }
+  .tabname { margin-left: 10px; font-family: var(--mono); font-size: 13px; color: var(--muted); }
+  .tabname .dotfile { color: var(--text); }
+
+  .code-area { display: flex; flex: 1; overflow: auto; min-height: 0; }
+  .gutter { flex: none; padding: 16px 12px 16px 16px; text-align: right; font-family: var(--mono);
+    font-size: 15px; line-height: 1.6; color: var(--gutter); user-select: none; background: var(--editor-bg); }
+  pre.code { margin: 0; padding: 16px 18px; font-family: var(--mono); font-size: 15px;
+    line-height: 1.6; color: var(--text); white-space: pre; tab-size: 4; flex: 1; }
+  .tok-kw { color: var(--kw); } .tok-str { color: var(--str); } .tok-num { color: var(--num); }
+  .tok-com { color: var(--com); font-style: italic; } .tok-fn { color: var(--fn); }
+  .caret { display: inline-block; width: 2px; height: 1.05em; background: var(--caret);
+    margin-left: 1px; vertical-align: text-bottom; animation: blink 1.05s steps(1) infinite; }
+  .caret.solid { animation: none; }
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .drawer { border-top: 1px solid var(--panel-line); background: var(--panel); padding: 12px 16px; }
+  .drawer summary { cursor: pointer; font-size: 13px; color: var(--muted); }
+  .drawer textarea { width: 100%; height: 150px; margin-top: 10px; background: var(--editor-bg);
+    color: var(--text); border: 1px solid #45475a; border-radius: 6px; font-family: var(--mono);
+    font-size: 13px; padding: 10px; resize: vertical; }
+
+  @media (prefers-reduced-motion: reduce) { .caret { animation: none; } }
+</style>
+</head>
+<body>
+  <div class="controls">
+    <button id="play" class="primary">&#9654; Start</button>
+    <button id="restart">&#8634; Restart</button>
+    <button id="full">&#10530; Fullscreen</button>
+    <div class="ctrl-group"><span>Speed</span>
+      <input id="speed" type="range" min="1" max="10" value="3" title="Typing speed"></div>
+    <div class="ctrl-group"><span>Run for</span>
+      <select id="duration" title="Auto-stop after">
+        <option value="15">15 min</option>
+        <option value="30">30 min</option>
+        <option value="45">45 min</option>
+        <option value="60">60 min</option>
+        <option value="90" selected>90 min</option>
+      </select></div>
+    <label class="ctrl-group"><input id="typos" type="checkbox" checked> Realistic typos</label>
+    <span id="status" class="status">Idle</span>
+    <div class="spacer"></div>
+    <span class="brand">main.py — typed live<span class="badge">V2</span></span>
+  </div>
+
+  <div class="stage">
+    <div class="editor">
+      <div class="titlebar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="tabname"><span class="dotfile">main.py</span> — Project</span>
+      </div>
+      <div class="code-area" id="codeArea">
+        <div class="gutter" id="gutter">1</div>
+        <pre class="code" id="code"></pre>
+      </div>
+    </div>
+  </div>
+
+  <details class="drawer">
+    <summary>Edit the program being typed</summary>
+    <textarea id="source" spellcheck="false"></textarea>
+  </details>
+
+<script>
+(function () {
+  "use strict";
+
+  const DEFAULT_CODE = `# file_digest.py
+# Walk a folder and print a SHA-256 digest for every file.
+
+import hashlib
+import os
+import sys
+
+
+def hash_file(path, chunk_size=65536):
+    """Return the SHA-256 hex digest of a single file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(chunk_size), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def walk(root):
+    for dirpath, _, filenames in os.walk(root):
+        for name in filenames:
+            full = os.path.join(dirpath, name)
+            try:
+                digest = hash_file(full)
+            except OSError as err:
+                print(f"skip {full}: {err}", file=sys.stderr)
+                continue
+            print(f"{digest}  {full}")
+
+
+if __name__ == "__main__":
+    target = sys.argv[1] if len(sys.argv) > 1 else "."
+    walk(target)
+`;
+
+  const codeEl = document.getElementById("code");
+  const gutterEl = document.getElementById("gutter");
+  const areaEl = document.getElementById("codeArea");
+  const sourceEl = document.getElementById("source");
+  const playBtn = document.getElementById("play");
+  const restartBtn = document.getElementById("restart");
+  const fullBtn = document.getElementById("full");
+  const speedEl = document.getElementById("speed");
+  const durationEl = document.getElementById("duration");
+  const typosEl = document.getElementById("typos");
+  const statusEl = document.getElementById("status");
+
+  sourceEl.value = DEFAULT_CODE;
+
+  const KEYWORDS = new Set(("def class return if elif else for while in is not and or with as " +
+    "import from try except finally raise lambda yield global nonlocal pass break continue " +
+    "True False None print").split(" "));
+
+  let target = DEFAULT_CODE;
+  let typed = "";
+  let i = 0;
+  let playing = false;
+  let token = 0;
+  let deadline = 0;
+  let countdownTimer = null;
+  let wakeLock = null;
+
+  const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+
+  function highlightLine(line) {
+    let out = "", rest = line;
+    while (rest.length) {
+      let m = rest.match(/^#.*/);
+      if (m) { out += '<span class="tok-com">' + esc(m[0]) + "</span>"; break; }
+      m = rest.match(/^(?:[rbf]{0,2})("""[\s\S]*?"""|'''[\s\S]*?'''|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*')/);
+      if (m) { out += '<span class="tok-str">' + esc(m[0]) + "</span>"; rest = rest.slice(m[0].length); continue; }
+      m = rest.match(/^\d[\d_]*\.?\d*/);
+      if (m) { out += '<span class="tok-num">' + esc(m[0]) + "</span>"; rest = rest.slice(m[0].length); continue; }
+      m = rest.match(/^[A-Za-z_]\w*/);
+      if (m) {
+        const w = m[0];
+        if (KEYWORDS.has(w)) out += '<span class="tok-kw">' + esc(w) + "</span>";
+        else if (/(?:^|[^.\w])(def|class)\s*$/.test(line.slice(0, line.length - rest.length))) out += '<span class="tok-fn">' + esc(w) + "</span>";
+        else out += esc(w);
+        rest = rest.slice(w.length); continue;
+      }
+      out += esc(rest[0]); rest = rest.slice(1);
+    }
+    return out;
+  }
+  function highlight(text) { return text.split("\n").map(highlightLine).join("\n"); }
+
+  function render() {
+    const caretClass = playing && !reduceMotion ? "caret" : "caret solid";
+    codeEl.innerHTML = highlight(typed) + '<span class="' + caretClass + '"></span>';
+    const lines = typed.length ? typed.split("\n").length : 1;
+    let g = "";
+    for (let n = 1; n <= lines; n++) g += n + "\n";
+    gutterEl.textContent = g;
+    areaEl.scrollTop = areaEl.scrollHeight;
+  }
+
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+  // ---- human cadence (slow, deliberate) ----
+  function baseDelay() {
+    const s = parseInt(speedEl.value, 10);        // 1..10
+    const mean = 300 - (s - 1) * 28;              // ~300ms slow -> ~48ms fast
+    const jitter = (Math.random() - 0.35) * mean;
+    return Math.max(18, mean + jitter);
+  }
+  function pauseAfter(ch) {
+    if (ch === "\n") return 500 + Math.random() * 1100;            // line break
+    if (":,)]}".includes(ch)) return 200 + Math.random() * 360;
+    if (ch === ".") return 150 + Math.random() * 220;
+    if (ch === " ") {
+      const r = Math.random();
+      if (r < 0.03) return 3000 + Math.random() * 5000;            // long "stuck" think
+      if (r < 0.12) return 900 + Math.random() * 2200;             // ordinary think
+    }
+    return 0;
+  }
+
+  const NEIGHBORS = { a:"s", s:"d", d:"f", e:"r", r:"t", t:"y", o:"i", i:"o", n:"m", l:"k", c:"v", u:"y" };
+  function wrongChar(ch) {
+    const low = ch.toLowerCase();
+    if (NEIGHBORS[low]) { const w = NEIGHBORS[low]; return ch === low ? w : w.toUpperCase(); }
+    return null;
+  }
+
+  // ---- wake lock (keeps the screen lit) ----
+  async function acquireWakeLock() {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => { wakeLock = null; });
+      }
+    } catch (e) { /* unsupported or denied; animation still runs */ }
+  }
+  async function releaseWakeLock() {
+    try { if (wakeLock) { await wakeLock.release(); wakeLock = null; } } catch (e) {}
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (playing && document.visibilityState === "visible" && !wakeLock) acquireWakeLock();
+  });
+
+  function fmt(ms) {
+    const s = Math.max(0, Math.floor(ms / 1000));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return (h ? h + ":" : "") + pad(m) + ":" + pad(sec);
+  }
+  function startCountdown() {
+    stopCountdown();
+    statusEl.classList.add("live");
+    countdownTimer = setInterval(() => {
+      const left = deadline - Date.now();
+      statusEl.textContent = "\u23F1 " + fmt(left) + " left";
+      if (left <= 0) endSession(token);
+    }, 250);
+  }
+  function stopCountdown() { if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; } }
+
+  async function reviewPause(myToken) {
+    // simulate reading what was written: scroll up, hold, scroll back
+    areaEl.scrollTop = 0;
+    await sleep(2500 + Math.random() * 3500);
+    if (!playing || token !== myToken) return;
+    areaEl.scrollTop = areaEl.scrollHeight;
+    await sleep(1500 + Math.random() * 2500);
+  }
+
+  async function session() {
+    const myToken = ++token;
+    playing = true;
+    playBtn.textContent = "\u275A\u275A Pause";
+    await acquireWakeLock();
+    startCountdown();
+    render();
+
+    while (playing && token === myToken && Date.now() < deadline) {
+      // type one full pass of the program
+      while (playing && token === myToken && i < target.length && Date.now() < deadline) {
+        const ch = target[i];
+        if (typosEl.checked && /[a-z]/i.test(ch) && Math.random() < 0.03) {
+          const w = wrongChar(ch);
+          if (w) {
+            typed += w; render();
+            await sleep(baseDelay());
+            if (!playing || token !== myToken) return;
+            await sleep(160 + Math.random() * 260);
+            typed = typed.slice(0, -1); render();
+            await sleep(110 + Math.random() * 140);
+            if (!playing || token !== myToken) return;
+          }
+        }
+        typed += ch; i++; render();
+        await sleep(baseDelay() + pauseAfter(ch));
+      }
+      // finished a pass before the deadline -> review, then start the file over
+      if (i >= target.length && Date.now() < deadline) {
+        await reviewPause(myToken);
+        if (!playing || token !== myToken) return;
+        typed = ""; i = 0; render();
+        await sleep(800 + Math.random() * 1500);
+      }
+    }
+    endSession(myToken);
+  }
+
+  function endSession(myToken) {
+    if (myToken !== token) return;
+    playing = false;
+    stopCountdown();
+    releaseWakeLock();
+    statusEl.classList.remove("live");
+    statusEl.textContent = "Done";
+    playBtn.textContent = "\u25B6 Start";
+    render();
+  }
+
+  function pause() {
+    playing = false;
+    token++;
+    stopCountdown();
+    releaseWakeLock();
+    statusEl.classList.remove("live");
+    statusEl.textContent = i >= target.length ? "Idle" : "Paused";
+    playBtn.textContent = i >= target.length ? "\u25B6 Start" : "\u25B6 Resume";
+    render();
+  }
+
+  function restart() {
+    pause();
+    target = sourceEl.value;
+    typed = ""; i = 0; deadline = 0;
+    statusEl.textContent = "Idle";
+    playBtn.textContent = "\u25B6 Start";
+    render();
+  }
+
+  playBtn.addEventListener("click", () => {
+    if (playing) { pause(); return; }
+    if (i >= target.length) { typed = ""; i = 0; }
+    const durMs = parseInt(durationEl.value, 10) * 60 * 1000;
+    if (!deadline || Date.now() >= deadline) deadline = Date.now() + durMs;
+    session();
+  });
+  restartBtn.addEventListener("click", restart);
+  sourceEl.addEventListener("input", () => { if (!playing && i === 0) target = sourceEl.value; });
+  fullBtn.addEventListener("click", () => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.();
+    else document.exitFullscreen?.();
+  });
+
+  render();
+})();
+</script>
+</body>
+</html>
